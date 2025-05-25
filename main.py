@@ -7,12 +7,23 @@ import srt
 import yaml
 from pydub import AudioSegment, silence
 import nemo.collections.asr as nemo_asr
+import ffmpeg
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
-def generate_subtitles(wav_file: str):
+def mp4_to_wav(input_file, output_file):
+    (
+        ffmpeg
+        .input(input_file)
+        .output(output_file, format='wav', acodec='pcm_s16le', ac=1, ar='16000')
+        .run(quiet=False)
+    )
+    logger.info(f"✅ Successfully created: {output_file}")
+
+
+def generate_subtitles(wav_file: str, srt_file: str):
     with open('config.yml', 'r') as file:
         CONFIG = yaml.safe_load(file)
 
@@ -59,7 +70,6 @@ def generate_subtitles(wav_file: str):
         start_ms += len(chunk)
         os.remove(chunk_path)
 
-    srt_file = "output.srt"
     with open(srt_file, "w", encoding="utf-8") as f:
         f.write(srt.compose(subtitles))
 
@@ -68,10 +78,17 @@ def generate_subtitles(wav_file: str):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Audio transcription and subtitle generation")
-    parser.add_argument('--wav_file', type=str, required=True, help='Path to the input WAV file')
+    parser.add_argument('--input_file', type=str, required=True, help='Path to the input WAV file')
+    parser.add_argument('--output_file', type=str, default='output.srt', help='Path to the input WAV file')
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    generate_subtitles(args.wav_file)
+
+    if args.input_file.endswith('.mp4'):
+        wav_file = args.input_file.replace('.mp4', '.wav')
+        mp4_to_wav(args.input_file, wav_file)
+        args.input_file = wav_file
+
+    generate_subtitles(args.input_file, args.output_file)
