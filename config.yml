@@ -1,2 +1,5 @@
-
 model: nvidia/stt_hy_fastconformer_hybrid_large_pc
+audio:
+    silence_min: 50
+    silence_thresh: -40
+    segment_min: 500
