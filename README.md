@@ -6,7 +6,6 @@ This script converts MP4 or WAV audio/video files into time-aligned subtitle fil
 
 > **Note**: This script is only supported on Unix-based systems (Linux/macOS). NVIDIA NeMo is not officially supported on Windows. For more information, refer to the [NVIDIA NeMo GitHub repository](https://github.com/NVIDIA/NeMo).
 
-
 1. **Install Conda**  
    Download and install [Anaconda](https://www.anaconda.com/download) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
 
@@ -16,7 +15,7 @@ This script converts MP4 or WAV audio/video files into time-aligned subtitle fil
    conda activate armsub
    ```
 
-3. Upgrade pip (required before installing NeMo) 
+3. **Upgrade pip (required before installing NeMo)**
     ```bash
     python -m pip install --upgrade pip   
     ```
