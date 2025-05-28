@@ -22,7 +22,7 @@ This script converts MP4 or WAV audio/video files into time-aligned subtitle fil
 
 4. **Install required packages**  
    ```bash
-    pip install srt pyyaml pydub ffmpeg-python nemo_toolkit[asr]
+    pip install srt pyyaml pydub ffmpeg-python 'nemo_toolkit[asr]'
     ```
 
 
