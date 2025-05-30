@@ -2,6 +2,7 @@ import argparse
 import os
 import logging
 from datetime import timedelta
+from typing import List, Optional
 
 import srt
 import yaml
@@ -13,23 +14,32 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-def mp4_to_wav(input_file, output_file):
-    (
-        ffmpeg
-        .input(input_file)
-        .output(output_file, format='wav', acodec='pcm_s16le', ac=1, ar='16000')
-        .run(quiet=False)
-    )
-    logger.info(f"✅ Successfully created: {output_file}")
+def mp4_to_wav(input_file: str, output_file: str) -> None:
+    try:
+        (
+            ffmpeg
+            .input(input_file)
+            .output(output_file, format='wav', acodec='pcm_s16le', ac=1, ar='16000')
+            .run(quiet=False)
+        )
+    except Exception as e:
+         logging.error("An Exception occurred while trying to convert mp4 to wav.", exc_info=True)
 
 
-def generate_subtitles(wav_file: str, srt_file: str):
+def generate_subtitles(input_file: str, srt_file: str) -> None:
+
+    if input_file.endswith('.mp4'):
+        wav_file = input_file.replace('.mp4', '.wav')
+        mp4_to_wav(input_file, wav_file)
+    else:
+        wav_file = input_file
+        
     with open('config.yml', 'r') as file:
         CONFIG = yaml.safe_load(file)
 
     logger.info("Loading audio...")
     audio = AudioSegment.from_wav(wav_file)
-    chunks = silence.split_on_silence(
+    chunks: List[AudioSegment] = silence.split_on_silence(
         audio,
         min_silence_len=CONFIG['audio']['silence_min'],
         silence_thresh=CONFIG['audio']['silence_thresh'],
@@ -39,9 +49,9 @@ def generate_subtitles(wav_file: str, srt_file: str):
     logger.info(f"Detected {len(chunks)} segments.")
     model = nemo_asr.models.EncDecHybridRNNTCTCBPEModel.from_pretrained(model_name=CONFIG['model'])
 
-    subtitles = []
-    start_ms = 0
-    index = 1
+    subtitles: List[srt.Subtitle] = []
+    start_ms: int = 0
+    index: int = 1
 
     for chunk in chunks:
         chunk = chunk.set_channels(1)
@@ -72,15 +82,24 @@ def generate_subtitles(wav_file: str, srt_file: str):
 
     processed_subs = postprocess_subtitles(subtitles)
 
-    with open(srt_file, "w", encoding="utf-8") as f:
-        f.write(srt.compose(processed_subs))
+    try: 
+        with open(srt_file, "w", encoding="utf-8") as f:
+            logger.info(f"✅ Successfully created: {srt_file}")
+            f.write(srt.compose(processed_subs))
+        logger.info(f"✅ Saved subtitles to {srt_file}")
+    except Exception as e:
+         logging.error("An Exception occurred while trying to save subtitles.", exc_info=True)
 
-    logger.info(f"✅ Saved subtitles to {srt_file}")
 
-
-def postprocess_subtitles(subtitles, min_duration=timedelta(seconds=1.5), max_duration=timedelta(seconds=6), max_chars=80):
-    processed = []
-    buffer = None
+def postprocess_subtitles(
+    subtitles: List[srt.Subtitle],
+    min_duration: timedelta = timedelta(seconds=1.5),
+    max_duration: timedelta = timedelta(seconds=6),
+    max_chars: int = 80
+) -> List[srt.Subtitle]:
+    
+    processed: List[srt.Subtitle] = []
+    buffer: Optional[srt.Subtitle] = None
 
     for i, sub in enumerate(subtitles):
         duration = sub.end - sub.start
@@ -112,21 +131,21 @@ def postprocess_subtitles(subtitles, min_duration=timedelta(seconds=1.5), max_du
     return processed
 
 
-def split_subtitle(sub, max_chars=80):
-    text = sub.content.strip()
-    total_duration = sub.end - sub.start
-    words = text.split()
-    seconds_per_word = total_duration.total_seconds() / max(len(words), 1)
+def split_subtitle(sub: srt.Subtitle, max_chars: int = 80) -> List[srt.Subtitle]:
+    text: str = sub.content.strip()
+    total_duration: timedelta = sub.end - sub.start
+    words: List[str] = text.split()
+    seconds_per_word: float = total_duration.total_seconds() / max(len(words), 1)
 
-    segments = [seg.strip() for seg in text.split(",") if seg.strip()]
+    segments: List[str] = [seg.strip() for seg in text.split(",") if seg.strip()]
 
-    parts = []
-    current_text = ""
-    current_len = 0
-    current_words = 0
-    start_time = sub.start
+    parts: List[srt.Subtitle] = []
+    current_text: str = ""
+    current_len: int = 0
+    current_words: int = 0
+    start_time: timedelta = sub.start
 
-    def flush_segment(text, words_count):
+    def flush_segment(text: str, words_count: int) -> srt.Subtitle:
         nonlocal start_time
         end_time = start_time + timedelta(seconds=seconds_per_word * words_count)
         part = srt.Subtitle(index=0, start=start_time, end=end_time, content=text.strip())
@@ -151,7 +170,7 @@ def split_subtitle(sub, max_chars=80):
     if current_text:
         parts.append(flush_segment(current_text, current_words))
 
-    final_parts = []
+    final_parts: List[srt.Subtitle] = []
     for part in parts:
         if len(part.content) > max_chars:
             final_parts.extend(split_by_words(part, max_chars, seconds_per_word))
@@ -161,12 +180,12 @@ def split_subtitle(sub, max_chars=80):
     return final_parts
 
 
-def split_by_words(sub, max_chars, seconds_per_word):
-    words = sub.content.split()
-    parts = []
-    temp = []
-    current_len = 0
-    start_time = sub.start
+def split_by_words(sub: srt.Subtitle, max_chars: int, seconds_per_word: float) -> List[srt.Subtitle]:
+    words: List[str] = sub.content.split()
+    parts: List[srt.Subtitle] = []
+    temp: List[str] = []
+    current_len: int = 0
+    start_time: timedelta = sub.start
 
     for word in words:
         if current_len + len(word) + 1 > max_chars:
@@ -186,19 +205,14 @@ def split_by_words(sub, max_chars, seconds_per_word):
     return parts
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Audio transcription and subtitle generation")
     parser.add_argument('--input_file', type=str, required=True, help='Path to the input WAV file')
-    parser.add_argument('--output_file', type=str, default='subtitles.srt', help='Path to the input WAV file')
+    parser.add_argument('--output_file', type=str, default='subtitles.srt', help='Path to the output .srt file.')
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-
-    if args.input_file.endswith('.mp4'):
-        wav_file = args.input_file.replace('.mp4', '.wav')
-        mp4_to_wav(args.input_file, wav_file)
-        args.input_file = wav_file
 
     generate_subtitles(args.input_file, args.output_file)
